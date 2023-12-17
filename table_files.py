@@ -246,20 +246,26 @@ def main():
             model = st.radio("Selectionnez le modèle de traitement : ", [
                              "Regression Linéaire", "Réseau Neuronal", "Classification NB"], horizontal=True)
             if model == "Regression Linéaire":
-                linear_reg(old_data, selected_columns)
+                linear_reg(old_data)
             elif model == "Réseau Neuronal":
                 nnetwork(old_data, selected_columns)
             elif model == "Classification NB":
                 class_nb(old_data[selected_columns], selected_columns)
 
 
-def linear_reg(df, X):
-    # Sélectionner y
-    y_selected = st.selectbox(
-        "Sélectionnez les colonnes à afficher:", df.columns, key="y_col")
-    X = df[X]
+def linear_reg(df):
+    col_x_selected, col_y_selected = st.columns(2)
+    with col_x_selected:
+        # Sélectionner X
+        x_selected = st.multiselect(
+            "Sélectionnez la colonne X :", df.columns, key="x_col")
+    with col_y_selected:
+        # Sélectionner y
+        y_selected = st.selectbox(
+            "Sélectionnez la colonne à prédire:", df.columns, key="y_col")
+    X = df[x_selected]
     y = df[y_selected]
-    col_x, col_y = st.columns(2)
+    col_x, col_y = st.columns([4, 2])
     with col_x:
         st.write("X")
         st.write(X)
@@ -267,42 +273,65 @@ def linear_reg(df, X):
         st.write("y")
         st.write(y)
 
-    '''plt.scatter(X, y, s=20)
-    plt.grid()
-    plt.xlabel('x_1')
-    plt.ylabel('y')
-    st.pyplot()'''
-
     # Division des Données
     x_train, x_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42)
 
+    # Remodeler les données d'entrée
+    # x_train_reshaped = x_train.values.reshape(-1, 1)
+    # x_test_reshaped = x_test.values.reshape(-1, 1)
+    x_train_reshaped = x_train.values
+    x_test_reshaped = x_test.values
+
+    st.info("Taille de x_test :" + str(x_test.shape) +
+            " | Taille de y_test :" + str(y_test.shape))
+
     lr = LinearRegression()
-    lr.fit(x_train, y_train)
+    lr.fit(x_train_reshaped, y_train)
     # Paramètres du modèle: intercept=theta0 and coef=les autres theta
     lr.intercept_, lr.coef_
 
-    st.write("Shape x_test")
-    st.write(x_test.shape)
-
     st.write('y_pred')
-    y_pred = lr.predict(x_test)
+    y_pred = lr.predict(x_test_reshaped)
     st.write(y_pred)
 
     err = (y_pred-y_test)**2
     err_m = err.mean()
     err_m
     st.write("Score")
-    st.write(lr.score(x_test, y_test))
+    st.write(lr.score(x_test_reshaped, y_test))
 
     # Tracer le nuage de points
-    plt.scatter(x_test, y_test, s=20, label='Actual')
-    plt.scatter(x_test, y_pred, s=20, label='Predicted')
-    plt.grid()
-    plt.xlabel('x_1')
-    plt.ylabel('y')
+    fig = plt.figure(figsize=(10, 6))
+    ax = fig.add_subplot(111, projection='3d' if len(
+        x_selected) > 2 else 'rectilinear')
+
+    # Si vous avez plus de deux fonctionnalités, vous pouvez utiliser un tracé en 3D
+    if len(x_selected) > 2:
+        ax.scatter(x_test_reshaped[:, 0], x_test_reshaped[:, 1],
+                   y_test, c='b', marker='o', label='Actual')
+        ax.scatter(x_test_reshaped[:, 0], x_test_reshaped[:, 1],
+                   y_pred, c='r', marker='o', label='Predicted')
+        ax.set_xlabel(x_selected[0])
+        ax.set_ylabel(x_selected[1])
+        ax.set_zlabel('y')
+    elif len(x_selected) == 2:
+        plt.scatter(x_test_reshaped[:, 0], y_test,
+                    c='b', marker='o', label='Actual')
+        plt.scatter(x_test_reshaped[:, 0], y_pred,
+                    c='r', marker='o', label='Predicted')
+        plt.xlabel(x_selected[0])
+        plt.ylabel('y')
+    else:
+        # Sinon, utilisez un tracé en 2D
+        ax.scatter(x_test_reshaped, y_test, c='b', marker='o', label='Actual')
+        ax.scatter(x_test_reshaped, y_pred, c='r',
+                   marker='o', label='Predicted')
+        ax.set_xlabel(x_selected[0])
+        ax.set_ylabel('y')
+
     plt.legend()
-    st.pyplot()
+    st.pyplot(fig)
 
 
 def nnetwork(df, X):
@@ -345,8 +374,9 @@ def nnetwork(df, X):
     st.subheader("Ajout de couches :")
     st.info(
         "Nous utilisons 3 couches avec la fonction d'actiation 'Relu' pour l'instant..", icon="❕")
-    model.add(Dense(5, input_dim=5, activation='relu'))
-    model.add(Dense(5, activation='relu'))
+    input_dim = X.values.shape[1]
+    model.add(Dense(5, input_dim=input_dim, activation='relu'))
+    model.add(Dense(input_dim, activation='relu'))
     model.add(Dense(1, activation='relu'))
     st.write(model.summary())
 
@@ -390,8 +420,10 @@ def nnetwork(df, X):
 
     Y_pred = model.predict(x_test_scal)
     # st.write(f"Y_pred = {Y_pred}")
-    st.write('r2 score: ', r2_score(x_test_scal, Y_pred))
+    # st.write('r2 score: ', r2_score(x_test_scal, Y_pred))
+    st.write('r2 score: ', r2_score(y_test_scal, Y_pred))
 
+    plt.clf()
     Y_pred = model.predict(x_test_scal).flatten()
     plt.scatter(y_test_scal, Y_pred)
     st.pyplot(plt)
