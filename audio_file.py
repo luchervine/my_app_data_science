@@ -8,6 +8,7 @@ from pydub.playback import play
 from pydub.generators import Sine
 from scipy.signal import find_peaks
 import matplotlib.pyplot as plt
+from scipy.fft import fft, fftfreq
 
 # Interface utilisateur Streamlit pour la manipulation des fichiers audio avec SciPy
 
@@ -36,6 +37,7 @@ def main():
 
         # Afficher le graphique du signal audio
         st.subheader("Graphique du signal audio")
+        plt.clf()
         plt.figure(figsize=(10, 4))
         plt.plot(np.arange(len(audio_data)) / sample_rate, audio_data)
         plt.xlabel("Temps (secondes)")
@@ -46,28 +48,80 @@ def main():
         # Appliquer une opération sur le signal audio
         st.subheader("Opération sur le signal audio")
         operation_type = st.selectbox("Choisissez une opération :", [
-                                      "Aucune", "Normalisation", "Inversion", "Filtrage passe-bas", "Filtrage passe-haut", "Effets sonores"])
+            "Aucune", "Normalisation", "Inversion", "Filtrage passe-bas", "Filtrage passe-haut", "Effets sonores"])
 
         if operation_type == "Normalisation":
             normalized_audio = normalize_audio(audio_data)
             st.audio(normalized_audio, format="audio/wav",
                      sample_rate=sample_rate)
             st.write("Audio normalisé : Signal audio après normalisation")
+
+            # Afficher le graphique du signal audio normalisé
+            plt.clf()
+            plt.figure(figsize=(10, 4))
+            plt.plot(np.arange(len(normalized_audio)) /
+                     sample_rate, normalized_audio)
+            plt.xlabel("Temps (secondes)")
+            plt.ylabel("Amplitude")
+            plt.title("Signal audio normalisé")
+            st.pyplot()
+
+            # Ajoutez une section pour l'analyse fréquentielle
+            st.subheader("Analyse Fréquentielle")
+            plot_fft(normalized_audio, "FFT du Signal Normalisé", sample_rate)
+
         elif operation_type == "Inversion":
             inverted_audio = invert_audio(audio_data)
             st.audio(inverted_audio, format="audio/wav",
                      sample_rate=sample_rate)
             st.write("Audio inversé : Signal audio après inversion")
+
+            # Afficher le graphique du signal audio inversé
+            plt.clf()
+            plt.figure(figsize=(10, 4))
+            plt.plot(np.arange(len(inverted_audio)) /
+                     sample_rate, inverted_audio)
+            plt.xlabel("Temps (secondes)")
+            plt.ylabel("Amplitude")
+            plt.title("Signal audio inversé")
+            st.pyplot()
+
+            # Ajoutez une section pour l'analyse fréquentielle
+            st.subheader("Analyse Fréquentielle")
+            plot_fft(inverted_audio, "FFT du Signal Inversé", sample_rate)
+
         elif operation_type == "Filtrage passe-bas" or operation_type == "Filtrage passe-haut":
             cutoff_frequency = st.slider(
-                "Fréquence de coupure (Hz)", min_value=0, max_value=int(sample_rate / 2), value=1000, step=100)
+                "Fréquence de coupure (Hz)", min_value=0, max_value=int(sample_rate / 2)-50, value=1000, step=100)
+            # Appliquer le filtre
+            filtered_audio = apply_filter(
+                audio_data, sample_rate, operation_type, cutoff_frequency)
+
+            st.audio(filtered_audio, format="audio/wav",
+                     sample_rate=sample_rate)
+            st.write(
+                f"Audio filtré ({operation_type} à {cutoff_frequency} Hz): Signal audio après filtrage")
+
+            # Afficher le graphique du signal audio filtré
+            plt.clf()
+            plt.figure(figsize=(10, 4))
+            plt.plot(np.arange(len(filtered_audio)) /
+                     sample_rate, filtered_audio)
+            plt.xlabel("Temps (secondes)")
+            plt.ylabel("Amplitude")
+            plt.title(
+                f"Signal audio filtré ({operation_type} à {cutoff_frequency} Hz)")
+            st.pyplot()
+
+            # Ajoutez une section pour l'analyse fréquentielle
+            st.subheader("Analyse Fréquentielle")
+            plot_fft(filtered_audio, "FFT du Signal " +
+                     operation_type, sample_rate)
 
         elif operation_type == "Effets sonores":
             effect_type = st.selectbox("Choisissez un effet sonore :", [
                 "Aucun effet", "Écho", "Réverbération", "Inversion de phase"])
 
-            cutoff_frequency = st.slider(
-                "Fréquence de coupure (Hz)", min_value=0, max_value=int(sample_rate / 2), value=1000, step=100)
             # Appliquer l'effet sonore
             if effect_type == "Écho":
                 audio_data = apply_echo(audio_data, sample_rate)
@@ -80,14 +134,18 @@ def main():
             st.audio(audio_data, format="audio/wav", sample_rate=sample_rate)
             st.write(f"Audio après l'effet sonore : {effect_type}")
 
-            # Appliquer le filtre
-            filtered_audio = apply_filter(
-                audio_data, sample_rate, operation_type, cutoff_frequency)
+            # Afficher le graphique du signal audio après l'effet sonore
+            plt.clf()
+            plt.figure(figsize=(10, 4))
+            plt.plot(np.arange(len(audio_data)) / sample_rate, audio_data)
+            plt.xlabel("Temps (secondes)")
+            plt.ylabel("Amplitude")
+            plt.title(f"Signal audio après l'effet sonore : {effect_type}")
+            st.pyplot()
 
-            st.audio(filtered_audio, format="audio/wav",
-                     sample_rate=sample_rate)
-            st.write(
-                f"Audio filtré ({operation_type} à {cutoff_frequency} Hz): Signal audio après filtrage")
+            # section pour l'analyse fréquentielle
+            st.subheader("Analyse Fréquentielle")
+            plot_fft(audio_data, "FFT du Signal "+effect_type, sample_rate)
 
         st.subheader("Traitement du signal audio")
         traitement_type = st.selectbox("Choisissez une opération :", [
@@ -100,19 +158,20 @@ def main():
                 "Seuil d'amplitude", min_value=0.01, max_value=1.0, value=0.1, step=0.01)
 
             # Appliquer l'analyse des pics d'amplitude
-            peaks, _ = find_amplitude_peaks(audio_data, threshold)
+            peaks, peak_values = find_amplitude_peaks(audio_data, threshold)
 
             # Afficher le signal avec les pics d'amplitude
-            plt.figure(figsize=(10, 4))
-            plt.plot(np.arange(len(audio_data)) / sample_rate, audio_data)
-            plt.plot(peaks / sample_rate,
-                     audio_data[peaks], 'ro', label='Pics d\'amplitude')
-            plt.xlabel("Temps (secondes)")
-            plt.ylabel("Amplitude")
-            plt.title("Analyse des pics d'amplitude")
-            plt.legend()
-            st.pyplot()
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.plot(np.arange(len(audio_data)) / sample_rate, audio_data)
+            ax.plot(peaks / sample_rate,
+                    peak_values, 'ro', label='Pics d\'amplitude')
+            ax.set_xlabel("Temps (secondes)")
+            ax.set_ylabel("Amplitude")
+            ax.set_title("Analyse des pics d'amplitude")
+            ax.legend()
 
+            # Afficher le graphique dans Streamlit
+            st.pyplot(fig)
 
 # Fonction pour normaliser le signal audio
 
@@ -133,6 +192,7 @@ def spectogram(audio_data, sample_rate):
     # Afficher le spectrogramme du signal audio
     st.subheader("Spectrogramme du signal audio")
     frequencies, times, Sxx = spectrogram(audio_data, sample_rate)
+    plt.clf()
     plt.figure(figsize=(10, 4))
     plt.pcolormesh(times, frequencies, 10 * np.log10(Sxx))
     plt.ylabel('Fréquence [Hz]')
@@ -198,6 +258,24 @@ def apply_reverb(audio_data, sample_rate):
 
 def apply_phase_inversion(audio_data):
     return -audio_data
+
+# Ajoutez une fonction pour l'analyse fréquentielle
+
+
+def plot_fft(data, title, fs):
+    fft_values = fft(data)
+    freqs = fftfreq(len(fft_values), 1/fs)
+
+    plt.clf()
+    plt.figure(figsize=(10, 4))
+    plt.plot(freqs, np.abs(fft_values))
+    plt.title(title)
+    plt.xlabel('Fréquence (Hz)')
+    plt.ylabel('Magnitude')
+    plt.grid()
+    # Définir les limites de l'axe des x
+    # plt.xlim([-20000, 20000])
+    st.pyplot()
 
 
 # Appeler la fonction principale

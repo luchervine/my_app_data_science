@@ -252,6 +252,8 @@ def main():
             elif model == "Classification NB":
                 class_nb(old_data[selected_columns], selected_columns)
 
+        dynamic_plot(old_data)
+
 
 def linear_reg(df):
     col_x_selected, col_y_selected = st.columns(2)
@@ -476,3 +478,32 @@ def class_nb(df, X):
         st.info(cfx)
     except ValueError as e:
         st.warning("Une erreur s'est produite : \nLe modèle Naive Bayes est généralement utilisé pour des problèmes de classification, où la variable à prédire est catégorique. Si votre tâche est une régression (prédiction d'une variable continue), vous devriez utiliser un modèle adapté à cette tâche. \nSi vous avez l'intention de résoudre un problème de régression, envisagez d'utiliser un autre algorithme, tel que la régression linéaire ou une forêt aléatoire, adapté aux valeurs continues.")
+
+
+def dynamic_plot(data):
+    st.title("Création dynamique de graphiques")
+
+    # Sélectionner les colonnes
+    selected_columns = st.multiselect(
+        "Sélectionnez les colonnes à inclure dans le graphique", data.columns)
+
+    # Sélectionner le type de graphique
+    chart_type = st.selectbox("Sélectionnez le type de graphique", [
+                              "Barres", "Nuage de points", "Courbe"])
+
+    # Régler la taille de l'échantillon
+    sample_size = st.slider("Taille de l'échantillon",
+                            min_value=1, max_value=len(data), value=len(data))
+
+    if not selected_columns:
+        st.warning("Veuillez sélectionner au moins une colonne.")
+        return
+
+    # Afficher le graphique dynamique en fonction de l'échantillon
+    sampled_data = data.sample(sample_size)
+    if chart_type == "Barres":
+        st.bar_chart(sampled_data[selected_columns])
+    elif chart_type == "Nuage de points":
+        st.line_chart(sampled_data[selected_columns])
+    elif chart_type == "Courbe":
+        st.area_chart(sampled_data[selected_columns])
